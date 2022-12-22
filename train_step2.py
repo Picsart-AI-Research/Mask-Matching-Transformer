@@ -6,6 +6,7 @@ import copy
 import itertools
 from typing import Any, Dict, List, Set
 import torch
+torch.set_num_threads(4)
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
