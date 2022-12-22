@@ -1,6 +1,7 @@
 # Mask Matching Transformer for Few-Shot Segmentation
 
-The manuscript has been accepted in **NeurIPS 2022**.
+The manuscript has been accepted in **NeurIPS 2022**. 
+
 This is the official implementation of the paper [Mask Matching Transformer for Few-Shot Segmentation](https://openreview.net/pdf?id=zt4xNo0lF8W).
 
 #### Pre-requests
