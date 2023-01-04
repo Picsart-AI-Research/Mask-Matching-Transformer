@@ -1,6 +1,6 @@
 import logging
 import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 from collections import OrderedDict
 import copy
 import itertools
@@ -174,16 +174,6 @@ def get_evaluator(cfg, dataset_name, output_folder=None):
 def do_test(cfg, model, data_loaders, evaluators):
     results = OrderedDict()
     for dataset_name, data_loader, evaluator in zip(cfg.DATASETS.TEST, data_loaders, evaluators):
-        # if cfg.INPUT.DATASET_MAPPER_NAME == "fewshot_sem":
-        #     mapper = FewShotDatasetMapper(cfg, False)
-        # elif cfg.INPUT.DATASET_MAPPER_NAME == "fewshot_sem_ori":
-        #     mapper = FewShotDatasetMapper_ori(cfg, False)
-        # else:
-        #     mapper = None
-        # data_loader = build_detection_test_loader(cfg, dataset_name, mapper = mapper)
-        # evaluator = get_evaluator(
-        #     cfg, dataset_name, os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-        # )
         results_i = inference_on_dataset(model, data_loader, evaluator)
         results[dataset_name] = results_i
         if comm.is_main_process():
@@ -288,7 +278,7 @@ def setup(args):
     cfg.merge_from_list(args.opts) # ['SEED', k]
     # 
     cfg.merge_from_list(add_seed(cfg))
-    # OUTPUT_DIR = os.path.join('out', cfg.DATASETS.dataname, cfg.MODEL.META_ARCHITECTURE, str(cfg.DATASETS.SPLIT))
+
     DATASETS_TRAIN = (cfg.DATASETS.TRAIN[0] + str(cfg.DATASETS.SPLIT), )
     DATASETS_TEST = (cfg.DATASETS.TEST[0] + str(cfg.DATASETS.SPLIT) +'_'+ str(cfg.DATASETS.SHOT) + 'shot',)
     # 

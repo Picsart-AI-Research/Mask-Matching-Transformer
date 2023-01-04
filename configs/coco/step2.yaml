@@ -1,5 +1,4 @@
-
-# python train_step2.py --config-file configs/coco/step2.yaml --num-gpus 1
+# python train.py --config-file configs/coco/step2.yaml --num-gpus 1
 
 _BASE_: Base-COCOStuff164K-171.yaml
 DATASETS:
@@ -58,7 +57,7 @@ OUTPUT_DIR: ./out/coco
 
 SOLVER:
   IMS_PER_BATCH: 4
-  TEST_IMS_PER_BATCH: 8
+  TEST_IMS_PER_BATCH: 4
   MAX_ITER: 20000
   WEIGHT_DECAY: 0.05    # 0.05
   BASE_LR: 0.0001

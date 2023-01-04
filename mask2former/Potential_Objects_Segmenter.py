@@ -12,10 +12,14 @@ from detectron2.modeling.backbone import Backbone
 from detectron2.modeling.postprocessing import sem_seg_postprocess
 from detectron2.structures import Boxes, ImageList, Instances, BitMasks
 from detectron2.utils.memory import retry_if_cuda_oom
+from detectron2.layers import ShapeSpec
+
 
 from .modeling.criterion import SetCriterion
 from .modeling.matcher import HungarianMatcher
 from .modeling.fewshot_loss import WeightedDiceLoss
+from .modeling.backbone import resnet as models
+from .modeling.backbone import svf
 
 
 @META_ARCH_REGISTRY.register()
@@ -24,7 +28,7 @@ class POS(nn.Module):
     def __init__(
         self,
         *,
-        backbone: Backbone,
+        # backbone: Backbone,
         sem_seg_head: nn.Module,
         criterion: nn.Module,
         num_queries: int,
@@ -43,7 +47,17 @@ class POS(nn.Module):
     ):
 
         super().__init__()
-        self.backbone = backbone
+        # self.backbone = backbone
+        resnet = models.resnet50(pretrained=True)
+        self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu1, resnet.conv2, resnet.bn2, resnet.relu2, resnet.conv3, resnet.bn3, resnet.relu3, resnet.maxpool)
+        self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
+
+        self.layer0 = svf.resolver(self.layer0, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer1 = svf.resolver(self.layer1, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer2 = svf.resolver(self.layer2, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer3 = svf.resolver(self.layer3, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer4 = svf.resolver(self.layer4, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+
         self.sem_seg_head = sem_seg_head
         self.criterion = criterion
         self.criterion_for_fewshot = WeightedDiceLoss()   #####
@@ -65,8 +79,14 @@ class POS(nn.Module):
 
     @classmethod
     def from_config(cls, cfg):
-        backbone = build_backbone(cfg)
-        sem_seg_head = build_sem_seg_head(cfg, backbone.output_shape())
+        # backbone = build_backbone(cfg)
+        output_shape = {
+            'res2': ShapeSpec(channels=256, stride=4),
+            'res3': ShapeSpec(channels=512, stride=8),
+            'res4': ShapeSpec(channels=1024, stride=16),
+            'res5': ShapeSpec(channels=2048, stride=32),
+        }
+        sem_seg_head = build_sem_seg_head(cfg, output_shape)
 
         # Loss parameters:
         deep_supervision = cfg.MODEL.MASK_FORMER.DEEP_SUPERVISION
@@ -108,7 +128,7 @@ class POS(nn.Module):
         )
 
         return {
-            "backbone": backbone,
+            # "backbone": backbone,
             "sem_seg_head": sem_seg_head,
             "criterion": criterion,
             "num_queries": cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES,
@@ -161,9 +181,20 @@ class POS(nn.Module):
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.size_divisibility)
         with torch.no_grad():   
-            features = self.backbone(images.tensor)
-
-
+            # features = self.backbone(images.tensor)
+            query_feat_0 = self.layer0(images.tensor)
+            query_feat_1 = self.layer1(query_feat_0)
+            query_feat_2 = self.layer2(query_feat_1)
+            query_feat_3 = self.layer3(query_feat_2)  
+            query_feat_4 = self.layer4(query_feat_3)
+            # print(query_feat_4.shape, query_feat_3.shape, query_feat_2.shape)
+        h, w = query_feat_2.shape[-2:]
+        query_feat_3_ = F.interpolate(query_feat_3.clone(), size=(h//2, w//2), mode="bilinear", align_corners=True)
+        query_feat_4_ = F.interpolate(query_feat_4.clone(), size=(h//2, w//2), mode="bilinear", align_corners=True)
+        features = {'res5':query_feat_4_, 'res4':query_feat_3_, 'res3':query_feat_2, 'res2':query_feat_1}
+        outputs = self.sem_seg_head(features)
+        mask_pred_results = outputs["pred_masks"].sigmoid()
+        
         # label
         label = [x["label"].to(self.device) for x in batched_inputs]   # bs*h*w
         bs = len(label)
@@ -173,8 +204,7 @@ class POS(nn.Module):
         labels = label.clone()
         labels[label == 255] = 0
 
-        outputs = self.sem_seg_head(features)
-        mask_pred_results = outputs["pred_masks"].sigmoid()
+
         
         # upsample masks
         mask_pred_results = F.interpolate(
@@ -185,13 +215,14 @@ class POS(nn.Module):
         )
 
         ious = self.get_iou(mask_pred_results, labels)
-        _, index = torch.max(ious, dim = 1)
+        _, index = ious.topk(2, dim=1, largest=True, sorted=True)
 
         bs_idx = torch.range(0, labels.shape[0]-1).long()
-        out = mask_pred_results[(bs_idx, index)].unsqueeze(1)
+        out = mask_pred_results[(bs_idx, index[:,1])].unsqueeze(1)
+        # out2 = mask_pred_results[(bs_idx, index[:,2])].unsqueeze(1)
+        # out = torch.cat([out1, out2], dim = 1).mean(dim = 1).unsqueeze(1)
         dout_bg = 1 - out
         out_all = torch.cat([dout_bg, out],1)
-
 
         if self.training:
             # mask classification target

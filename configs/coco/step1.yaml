@@ -1,5 +1,4 @@
-
-# python train_step1.py --config-file configs/coco/step1.yaml --num-gpus 1
+# python train.py --config-file configs/coco/step1.yaml --num-gpus 1
 
 _BASE_: Base-COCOStuff164K-171.yaml
 DATASETS:

@@ -428,15 +428,6 @@ class MSDeformAttnPixelDecoder_ori(nn.Module):
         self.lateral_convs = lateral_convs[::-1]
         self.output_convs = output_convs[::-1]
 
-        assert conv_dim == 256   # 保证positional embedding正确
-        i = 0
-        for dim, head in [(2048, 4),(1024, 4),(512, 2)]:   # (2048, 8),(1024, 4),(512, 2)  (2048, 8),(1024, 8),(512, 8)
-            k = CrossAT(dim, nhead = head, pre_norm = pre_norm)
-            self.add_module(f'crossat_{i}', k)
-            i = i + 1
-
-        self.add_module(f'crossat_4x', CrossAT4X(256, nhead = 2, pre_norm = pre_norm))
-
     @classmethod
     def from_config(cls, cfg, input_shape: Dict[str, ShapeSpec]):
         ret = {}
@@ -459,41 +450,13 @@ class MSDeformAttnPixelDecoder_ori(nn.Module):
         return ret
 
     @autocast(enabled=False)
-    def forward_features(self, features_que, features_sup, mask, mask_que):
+    def forward_features(self, features_que):
 
-        # sup_propotype_feature = features_sup['res5'].clone()
-        # if features_sup == None:
-        #     out_que, _ = self.deformable_attention(features_que)
-        #     out, multi_scale_features = self.forward_process(features_que, out_que)
-        #     return self.mask_features(out[-1]), out[0], multi_scale_features
-        # else:
         out_que, pos_que = self.deformable_attention(features_que)
-        out_que_copy = []
-        for i in out_que:
-            out_que_copy.append(i.clone())
-        # out_sup, pos_sup = self.deformable_attention(features_sup)
-
-        # append `out` with extra FPN levels
-        # Reverse feature maps into top-down order (from low to high resolution)
-        # for i in range(3):
-        #     crossat = getattr(self, f'crossat_{i}')
-        #     # print('x')
-        #     out_que[i], out_sup[i] = crossat(out_que[i], out_sup[i], pos_que[i], pos_sup[i])
 
         out_que, que_multi_scale_features = self.forward_process(features_que, out_que)
-        # out_sup, sup_multi_scale_features = self.forward_process(features_sup, out_sup)
         
-        out_que_copy.append(out_que[-1])
-        pos_que.append(self.pe_layer(out_que[-1]))
-        k = [out_que_copy, pos_que]
-        
-        # q_feature = out_que[-1]
-        # s_feature = out_sup[-1]
-        # q_pos = self.pe_layer(q_feature)
-        # s_pos = self.pe_layer(s_feature)
-        # out_que[-1], out_sup[-1] = self.crossat_4x(q_feature, s_feature, q_pos, s_pos, mask, mask_que)
-
-        return self.mask_features(out_que[-1]), que_multi_scale_features, None, None, k
+        return self.mask_features(out_que[-1]), que_multi_scale_features
 
 
 

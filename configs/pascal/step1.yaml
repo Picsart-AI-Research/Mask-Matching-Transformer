@@ -1,4 +1,4 @@
-# python train_step1.py --config-file configs/pascal/step1.yaml --num-gpus 1
+# python train.py --config-file configs/pascal/step1.yaml --num-gpus 1
 
 
 _BASE_: Base-VOC11K-20.yaml

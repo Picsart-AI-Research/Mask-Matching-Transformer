@@ -12,6 +12,7 @@ from detectron2.modeling.backbone import Backbone
 from detectron2.modeling.postprocessing import sem_seg_postprocess
 from detectron2.structures import Boxes, ImageList, Instances, BitMasks
 from detectron2.utils.memory import retry_if_cuda_oom
+from detectron2.layers import ShapeSpec
 
 from .modeling.criterion import SetCriterion
 from .modeling.matcher import HungarianMatcher
@@ -19,6 +20,10 @@ from .modeling.fewshot_loss import WeightedDiceLoss
 from .modeling.feature_alignment.self_align import MySelfAlignLayer
 from .modeling.feature_alignment.cross_align import CrossAT
 from .modeling.transformer_decoder.position_encoding import PositionEmbeddingSine
+
+from .modeling.backbone import resnet as models
+from .modeling.backbone import svf
+
 
 @META_ARCH_REGISTRY.register()
 class MMFormer(nn.Module):
@@ -30,7 +35,7 @@ class MMFormer(nn.Module):
     def __init__(
         self,
         *,
-        backbone: Backbone,
+        # backbone: Backbone,
         sem_seg_head: nn.Module,
         criterion: nn.Module,
         num_queries: int,
@@ -50,7 +55,16 @@ class MMFormer(nn.Module):
     ):
 
         super().__init__()
-        self.backbone = backbone
+        resnet = models.resnet50(pretrained=True)
+        self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu1, resnet.conv2, resnet.bn2, resnet.relu2, resnet.conv3, resnet.bn3, resnet.relu3, resnet.maxpool)
+        self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
+
+        self.layer0 = svf.resolver(self.layer0, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer1 = svf.resolver(self.layer1, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer2 = svf.resolver(self.layer2, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer3 = svf.resolver(self.layer3, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+        self.layer4 = svf.resolver(self.layer4, global_low_rank_ratio=1.0, skip_1x1=False, skip_3x3=False)
+
         self.sem_seg_head = sem_seg_head
         self.criterion = criterion
         self.criterion_for_fewshot = WeightedDiceLoss()   #####
@@ -89,8 +103,13 @@ class MMFormer(nn.Module):
 
     @classmethod
     def from_config(cls, cfg):
-        backbone = build_backbone(cfg)
-        sem_seg_head = build_sem_seg_head(cfg, backbone.output_shape())
+        output_shape = {
+            'res2': ShapeSpec(channels=256, stride=4),
+            'res3': ShapeSpec(channels=512, stride=8),
+            'res4': ShapeSpec(channels=1024, stride=16),
+            'res5': ShapeSpec(channels=2048, stride=32),
+        }
+        sem_seg_head = build_sem_seg_head(cfg, output_shape)
 
         # Loss parameters:
         deep_supervision = cfg.MODEL.MASK_FORMER.DEEP_SUPERVISION
@@ -132,7 +151,7 @@ class MMFormer(nn.Module):
         )
 
         return {
-            "backbone": backbone,
+            # "backbone": backbone,
             "sem_seg_head": sem_seg_head,
             "criterion": criterion,
             "num_queries": cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES,
@@ -164,9 +183,20 @@ class MMFormer(nn.Module):
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.size_divisibility)
         with torch.no_grad():
-            features = self.backbone(images.tensor)
+            query_feat_0 = self.layer0(images.tensor)
+            query_feat_1 = self.layer1(query_feat_0)
+            query_feat_2 = self.layer2(query_feat_1)
+            query_feat_3 = self.layer3(query_feat_2)  
+            query_feat_4 = self.layer4(query_feat_3)
+
+            h, w = query_feat_2.shape[-2:]
+            query_feat_3_ = F.interpolate(query_feat_3.clone(), size=(h//2, w//2), mode="bilinear", align_corners=True)
+            query_feat_4_ = F.interpolate(query_feat_4.clone(), size=(h//2, w//2), mode="bilinear", align_corners=True)
+            features = {'res5':query_feat_4_, 'res4':query_feat_3_, 'res3':query_feat_2, 'res2':query_feat_1}
+
             outputs = self.sem_seg_head(features)   # , labels
             mask_features = outputs["pred_masks"].sigmoid()
+            features = {'res5':query_feat_4_, 'res4':query_feat_3_, 'res3':query_feat_2, 'res2':query_feat_1}
 
 
         # trans sup_label from bs*shot*h*w to shot*bs*h*w
@@ -189,12 +219,17 @@ class MMFormer(nn.Module):
             sup_images = ImageList.from_tensors(sup_images, self.size_divisibility)
 
             with torch.no_grad():
-                supfeature = self.backbone(sup_images.tensor)  # sup_images.tensor
+                sup_feat_0 = self.layer0(sup_images.tensor)
+                sup_feat_1 = self.layer1(sup_feat_0)
+                sup_feat_2 = self.layer2(sup_feat_1)
+                sup_feat_3 = self.layer3(sup_feat_2)  
+                sup_feat_4 = self.layer4(sup_feat_3)
+                supfeature = {'res5':sup_feat_4, 'res4':sup_feat_3, 'res3':sup_feat_2, 'res2':sup_feat_1}
                 supfeatures.append(supfeature)
 
 
         
-        out_que = [features['res5'].float(), features['res4'].float(), features['res3'].float()]
+        out_que = [query_feat_4, query_feat_3, query_feat_2]
         
         pos_que = []
         for i in range(len(out_que)):

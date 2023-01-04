@@ -112,16 +112,11 @@ class MaskFormerHead(nn.Module):
             ),
         }
 
-    def forward(self, features, supfeatures=None, mask=None, mask_que = None, forward_to_end = True):
-        return self.layers(features, supfeatures, mask, mask_que, forward_to_end)
+    def forward(self, features, mask=None):
+        return self.layers(features, mask)
 
-    def layers(self, features, supfeatures, mask, mask_que, forward_to_end):
-        mask_features, multi_scale_features, sup_mask_features, sup_multi_scale_features, out_que_copy = self.pixel_decoder.forward_features(features,  supfeatures, mask, mask_que)
-
-        if not forward_to_end:
-            out = {}
-            out['multi_feature'] = out_que_copy
-            return out
+    def layers(self, features, mask):
+        mask_features, multi_scale_features = self.pixel_decoder.forward_features(features)
 
         predictions = self.predictor(multi_scale_features, mask_features,  mask)
         return predictions

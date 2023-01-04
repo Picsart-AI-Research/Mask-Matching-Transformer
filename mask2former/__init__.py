@@ -17,10 +17,12 @@ from .evaluation.fewshot_sem_seg_evaluation import (
 # models
 
 from .Potential_Objects_Segmenter import POS
+from .Potential_Objects_Segmenter_svf import POS_svf
 from .MM_Former import MMFormer 
+from .MM_Former_svf import MMFormer_svf 
 
 
 from .test_time_augmentation import SemanticSegmentorWithTTA
+
 # evaluation
-# from .evaluation.instance_evaluation import InstanceSegEvaluator
 from .evaluation.fewshot_sem_seg_evaluation import FewShotSemSegEvaluator

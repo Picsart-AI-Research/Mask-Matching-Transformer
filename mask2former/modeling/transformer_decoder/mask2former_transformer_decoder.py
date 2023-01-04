@@ -383,65 +383,15 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
             'pred_masks': que_predictions_mask[-1], 
             'decoder_output': decoder_output, 
             'que_mask_embeds': que_mask_embeds[-1],
-            # 'sup_mask_embeds_best': sup_mask_embeds_best,
-            # 'mask_features': mask_features,
-            # 'sup_mask_features': sup_mask_features,
-            # 'que_propotype_feature': que_propotype_feature,
-            # 'sup_propotype_feature': sup_propotype_feature,
-            # 'que_propotype_feature_256': x[0],
-            # 'sup_propotype_feature_256': xx[0],
         }
 
 
         if not self.training:
             return out
         else:
-            # out['pred_masks'] = que_predictions_mask[-1]
             out['aux_outputs'] = self._set_aux_loss(que_predictions_mask)
-            # out['pred_masks'] = que_predictions_mask[-1]
             return out
 
-
-        
-        # # x is a list of multi-scale feature
-        # sup_predictions_mask, sup_mask_embeds = self.forward_features(xx, sup_mask_features)
-
-        # # ious = self.get_iou(sup_predictions_mask[-1], mask)
-        # # _, index = torch.max(ious, dim = 1)
-        # # bs_idx = torch.range(0, mask_features.shape[0]-1).long()
-        # # # print(sup_mask_embeds.shape)
-        # # sup_mask_embeds_best = sup_mask_embeds[-1][(bs_idx, index)].unsqueeze(1)  # bs*1*256
-
-        # que_predictions_mask, que_mask_embeds = self.forward_features(x, mask_features)
-
-        # assert len(que_predictions_mask) == len(sup_predictions_mask)
-
-        # # for i in range(len(que_predictions_mask)):
-        # #     print(que_predictions_mask[i].shape, sup_predictions_mask[i].shape)
-
-
-        # # print(que_predictions_mask[-1].shape[-2], sup_predictions_mask[-1].shape[-2])
-
-        # out = {
-        #     'que_pred_masks': que_predictions_mask[-1], 
-        #     'sup_pred_masks': sup_predictions_mask[-1], 
-        #     'que_mask_embeds': que_mask_embeds[-1],
-        #     # 'sup_mask_embeds_best': sup_mask_embeds_best,
-        #     'mask_features': mask_features,
-        #     'sup_mask_features': sup_mask_features,
-        #     'que_propotype_feature': que_propotype_feature,
-        #     'sup_propotype_feature': sup_propotype_feature,
-        #     'que_propotype_feature_256': x[0],
-        #     'sup_propotype_feature_256': xx[0],
-        # }
-        # if not self.training:
-        #     return out
-        # else:
-        #     out['pred_masks'] = torch.cat([que_predictions_mask[-1],sup_predictions_mask[-1]], dim = -2)
-        #     out['aux_outputs'] = self._set_aux_loss(que_predictions_mask, sup_predictions_mask)
-        #     return out
-
-        # return out
 
     def forward_features(self, x, mask_features, sup_mask_embeds_best = None):
         assert len(x) == self.num_feature_levels
@@ -545,28 +495,3 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
                     for b in outputs_seg_masks[:-1]
                         ]
             return [{"pred_masks": torch.cat([b,c], dim = -2)} for b, c in zip(outputs_seg_masks[:-1], sup_outputs_seg_masks[:-1])]
-
-
-    def get_iou(self, pred, target):
-        pred = pred.sigmoid() 
-        b, c, h, w = pred.shape
-        target = target.unsqueeze(1)
-
-        if pred.shape[-2:] != target.shape[-2:]:
-            target = F.interpolate(
-            target.float(),
-            size=(pred.shape[-2], pred.shape[-1]),
-            mode="bilinear",
-            align_corners=False,
-        )
-
-
-        pred = pred.reshape(b, c,-1)
-        target = target.reshape(b, 1, -1)
-        
-        #compute the IoU of the foreground
-        Iand1 = torch.sum(target*pred, dim = -1)
-        Ior1 = torch.sum(target, dim = -1) + torch.sum(pred, dim = -1)-Iand1 + 0.0000001
-        IoU1 = Iand1/Ior1
-
-        return IoU1

@@ -32,6 +32,15 @@ def add_step2dir(cfg):
     OUTPUT_DIR = os.path.join('out', cfg.DATASETS.dataname,'step2', cfg.MODEL.META_ARCHITECTURE, str(cfg.DATASETS.SPLIT))
     return ['OUTPUT_DIR', OUTPUT_DIR]
 
+def add_dir(cfg):
+    if 'ori' in cfg.INPUT.DATASET_MAPPER_NAME:
+        step = 'step1'
+    else:
+        step = 'step2'
+
+    OUTPUT_DIR = os.path.join('out', cfg.DATASETS.dataname, step, cfg.MODEL.META_ARCHITECTURE, str(cfg.DATASETS.SPLIT))
+    return ['OUTPUT_DIR', OUTPUT_DIR]
+
 def add_dataset(cfg):
     DATASETS_TRAIN = (cfg.DATASETS.TRAIN[0] + str(cfg.DATASETS.SPLIT), )
     DATASETS_TEST = (cfg.DATASETS.TEST[0] + str(cfg.DATASETS.SPLIT) +'_'+ str(cfg.DATASETS.SHOT) + 'shot',)
