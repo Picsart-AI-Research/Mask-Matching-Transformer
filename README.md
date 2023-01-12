@@ -4,6 +4,16 @@ The manuscript has been accepted in **NeurIPS 2022**.
 
 This is the official implementation of the paper [Mask Matching Transformer for Few-Shot Segmentation](https://openreview.net/pdf?id=zt4xNo0lF8W).
 
+
+#### Updates
+*2023/1/3*
+1. We changed the backbone from **resnet50** to **resnet50_v2**, which is commonly used in few-shot segmentation, This change makes the results more stable and improves the result to a extent.
+2. We try to use [SVF (NeruIPS 22)](https://github.com/zechao-li/SVF-few-shot-segmentation) to fine-tune the backbone, which will further stabilize the results.
+Run this command for training:
+```
+    python train_step1_svf.py --config-file configs/DATASET/STEP1_SVF.yaml
+```
+
 #### Pre-requests
 
 1. Setup a conda environment(e.g., miniconda as follows).
