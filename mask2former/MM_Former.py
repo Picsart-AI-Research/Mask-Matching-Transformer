@@ -191,7 +191,7 @@ class MMFormer(nn.Module):
 
             h, w = query_feat_2.shape[-2:]
             query_feat_3_ = F.interpolate(query_feat_3.clone(), size=(h//2, w//2), mode="bilinear", align_corners=True)
-            query_feat_4_ = F.interpolate(query_feat_4.clone(), size=(h//2, w//2), mode="bilinear", align_corners=True)
+            query_feat_4_ = F.interpolate(query_feat_4.clone(), size=(h//4, w//4), mode="bilinear", align_corners=True)
             features = {'res5':query_feat_4_, 'res4':query_feat_3_, 'res3':query_feat_2, 'res2':query_feat_1}
 
             outputs = self.sem_seg_head(features)   # , labels
